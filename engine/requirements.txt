@@ -1,0 +1,7 @@
+requests>=2.31
+beautifulsoup4>=4.12
+rapidfuzz>=3.0
+# Only needed for BigBasket (render_js=True). After installing, run: playwright install chromium
+playwright>=1.44
+# Tests
+pytest>=8.0
