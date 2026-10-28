@@ -1,0 +1,57 @@
+x-backend: &backend
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://pricefinder:${POSTGRES_PASSWORD:-pricefinder-local-only}@db:5432/pricefinder
+    SMTP_HOST: ${SMTP_HOST:-mailpit}
+    SMTP_PORT: ${SMTP_PORT:-1025}
+    SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pricefinder
+      POSTGRES_USER: pricefinder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pricefinder-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricefinder -d pricefinder"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:8025:8025"]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

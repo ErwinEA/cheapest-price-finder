@@ -1,0 +1,43 @@
+name: Backend and engine tests
+on: [push, pull_request]
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - run: pip install -r backend/requirements.lock
+      - run: python -m pytest -q
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pricefinder_test
+          POSTGRES_USER: pricefinder
+          POSTGRES_PASSWORD: test-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pricefinder -d pricefinder_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://pricefinder:test-only-password@localhost:5432/pricefinder_test
+      DATABASE_URL: postgresql+psycopg://pricefinder:test-only-password@localhost:5432/pricefinder_test
+      JWT_SECRET: ci-only-disposable-migration-secret-123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.lock
+      - run: python -m pytest -q
+      - run: alembic upgrade head
+        working-directory: backend
+      - run: alembic check
+        working-directory: backend
